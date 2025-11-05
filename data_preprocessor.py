@@ -29,3 +29,26 @@ class DataPreprocessor:
             X.append(data_array[i:i + self.seq_length])
             y.append(target_array[i + self.seq_length])
         return np.array(X), np.array(y)
+
+
+if __name__ == "__main__":
+    from data_loader import StockDataLoader
+
+    ticker = input("Podaj ticker (np. TSLA, AAPL): ").strip().upper()
+
+    # Załaduj dane (jeśli trzeba, pobierz)
+    loader = StockDataLoader(ticker)
+    data = loader.download_data()
+    data = loader.add_indicators()
+
+    # Definiuj cechy
+    features = ["Close", "RSI", "MACD", "MACD_signal", "MACD_hist"]
+
+    # Preprocessing
+    preprocessor = DataPreprocessor(features=features, seq_length=30)
+    X_train, X_test, y_train, y_test = preprocessor.prepare(data)
+
+    print(f"\n🔹 X_train shape: {X_train.shape}")
+    print(f"🔹 X_test shape: {X_test.shape}")
+    print(f"🔹 y_train shape: {y_train.shape}")
+    print(f"🔹 y_test shape: {y_test.shape}")

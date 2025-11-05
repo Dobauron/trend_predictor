@@ -13,7 +13,7 @@ class StockTrendPredictor:
         # Dane
         loader = StockDataLoader(self.ticker)
         data = loader.download_data()
-        data = loader.add_indicators()
+        # data = loader.add_indicators()
 
         # Przygotowanie danych
         preprocessor = DataPreprocessor(self.features, self.seq_length)
