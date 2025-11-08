@@ -20,7 +20,7 @@ class StockTrendPredictor:
         X_train, X_test, y_train, y_test = preprocessor.prepare(data)
 
         # Model
-        model = LSTMModel(input_shape=(self.seq_length, len(self.features)))
+        model = LSTMModel(input_size=(self.seq_length, len(self.features)))
         history = model.train(X_train, y_train)
 
         # Ewaluacja
