@@ -1,37 +1,36 @@
 from data_loader import StockDataLoader
 from data_preprocessor import DataPreprocessor
-from model_lstm import LSTMModel
-from evaluator import ModelEvaluator
+from model_lstm import LSTMModel, LSTMTrainer
+from plot_utils import plot_forecast
 
-class StockTrendPredictor:
-    def __init__(self, ticker):
-        self.ticker = ticker
-        self.features = ["Close", "RSI", "MACD", "MACD_signal", "MACD_hist"]
-        self.seq_length = 30
+# ---------- Parametry ----------
+ticker = input("Podaj ticker spółki (np. TSLA, AAPL): ").strip().upper()
+features = ["Open", "High", "Low", "Close", "Volume"]
+seq_length = 500
+hidden_size = 32
+num_layers = 3
+dropout = 0.2
+epochs = 50
+batch_size = 32
+last_days = 100
+n_steps = 30
 
-    def run(self):
-        # Dane
-        loader = StockDataLoader(self.ticker)
-        data = loader.download_data()
-        # data = loader.add_indicators()
+# ---------- Dane ----------
+loader = StockDataLoader(ticker)
+data = loader.download_data()
+preprocessor = DataPreprocessor(features=features, seq_length=seq_length)
+X_train, X_test, y_train, y_test = preprocessor.prepare(data)
 
-        # Przygotowanie danych
-        preprocessor = DataPreprocessor(self.features, self.seq_length)
-        X_train, X_test, y_train, y_test = preprocessor.prepare(data)
+# ---------- Model ----------
+input_size = X_train.shape[2]
+model = LSTMModel(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, dropout=dropout)
+trainer = LSTMTrainer(model)
 
-        # Model
-        model = LSTMModel(input_size=(self.seq_length, len(self.features)))
-        history = model.train(X_train, y_train)
+# ---------- Trenowanie ----------
+trainer.train(X_train, y_train, epochs=epochs, batch_size=batch_size)
 
-        # Ewaluacja
-        y_pred = model.predict(X_test)
-        evaluator = ModelEvaluator()
-        evaluator.evaluate(y_test, y_pred)
-        evaluator.plot_training(history)
-        evaluator.plot_trends(data, y_test, y_pred, self.ticker)
+# ---------- Ewaluacja ----------
+trainer.evaluate(X_test, y_test)
 
-
-if __name__ == "__main__":
-    ticker = input("Podaj ticker spółki (np. AAPL, TSLA, BTC-USD): ").strip().upper()
-    predictor = StockTrendPredictor(ticker)
-    predictor.run()
+# ---------- Wykres ----------
+plot_forecast(data, preprocessor, model, X_test, last_days=last_days, n_steps=n_steps, features=features, device=trainer.device, ticker=ticker)

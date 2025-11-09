@@ -1,13 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from sklearn.metrics import  mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import numpy as np
-from data_loader import StockDataLoader
-from data_preprocessor import DataPreprocessor
 
-
-# ===================== MODEL LSTM (PyTorch) =====================
 class LSTMModel(nn.Module):
     def __init__(self, input_size, hidden_size=32, num_layers=2, dropout=0.3):
         super(LSTMModel, self).__init__()
@@ -27,7 +23,6 @@ class LSTMModel(nn.Module):
         return out
 
 
-# ===================== TRENER =====================
 class LSTMTrainer:
     def __init__(self, model, lr=0.001, device=None):
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -57,13 +52,12 @@ class LSTMTrainer:
 
     def evaluate(self, X_test, y_test):
         self.model.eval()
-
         with torch.no_grad():
-            X_test_tensor = torch.tensor(X_test, dtype=torch.float32)
-            y_test_tensor = torch.tensor(y_test, dtype=torch.float32)
+            X_test_tensor = torch.tensor(X_test, dtype=torch.float32).to(self.device)
+            y_test_tensor = torch.tensor(y_test, dtype=torch.float32).to(self.device)
 
-            preds = self.model(X_test_tensor).cpu().numpy()
-            y_true = y_test_tensor.cpu().numpy()
+            preds = self.model(X_test_tensor).cpu().numpy().flatten()
+            y_true = y_test_tensor.cpu().numpy().flatten()
 
         mae = mean_absolute_error(y_true, preds)
         mse = mean_squared_error(y_true, preds)
@@ -76,29 +70,3 @@ class LSTMTrainer:
         print(f"📈 R²:   {r2:.4f}")
 
         return mae, rmse, r2
-
-
-# ===================== TEST CAŁEGO PIPELINE’U =====================
-if __name__ == "__main__":
-    ticker = input("Podaj ticker spółki (np. TSLA, AAPL, BTC-USD): ").strip().upper()
-
-    # 1️⃣ Wczytanie danych z CSV (jeśli brak — pobierze z Yahoo)
-    loader = StockDataLoader(ticker)
-    data = loader.download_data()
-
-    # 2️⃣ Przygotowanie danych (sekwencje + skalowanie)
-    features = ["Open", "High", "Low", "Close", "Volume"]
-    preprocessor = DataPreprocessor(features=features, seq_length=100)
-    X_train, X_test, y_train, y_test = preprocessor.prepare(data)
-
-    # 3️⃣ Model LSTM (PyTorch)
-    input_size = X_train.shape[2]
-
-    model = LSTMModel(input_size=input_size, hidden_size=64, num_layers=2, dropout=0.1)
-
-    # 4️⃣ Trenowanie
-    trainer = LSTMTrainer(model)
-    trainer.train(X_train, y_train, epochs=50, batch_size=32)
-
-    # 5️⃣ Ewaluacja
-    trainer.evaluate(X_test, y_test)

@@ -20,25 +20,6 @@ class DataPreprocessor:
 
         X, y = self._create_sequences(df_scaled)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffle=False)
-        # print(df_scaled)
-        # # 🔍 DIAGNOSTYKA
-        # print("\n📊 Podgląd surowych danych:")
-        # print(data[["Close", "Target"]].head(10))
-        #
-        # print("\n📏 Zakresy po skalowaniu:")
-        # print(pd.DataFrame(scaled_features, columns=self.features).describe())
-        #
-        # print("\n🧩 Kształty tablic:")
-        # print(f"X shape: {X.shape}")
-        # print(f"y shape: {y.shape}")
-        # print(f"X_train shape: {X_train.shape}, X_test shape: {X_test.shape}")
-        # print(f"y_train shape: {y_train.shape}, y_test shape: {y_test.shape}")
-        #
-        # print("\n🎯 Przykładowe wartości targetu (y_train):")
-        # print(y_train[:10])
-        #
-        # print("\n🧠 Przykładowa sekwencja X_train[0]:")
-        # print(X_train[0][:5])
 
         return X_train, X_test, y_train, y_test
 

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import time
 
 class StockDataLoader:
-    def __init__(self, ticker: str, start: str = "2025-01-01",
+    def __init__(self, ticker: str, start: str = "2022-01-01",
                  end=(datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"),
                  interval="1d", data_folder="data"):
         self.ticker = ticker.upper()
