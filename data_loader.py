@@ -3,6 +3,8 @@ import pandas as pd
 import os
 from datetime import datetime, timedelta
 import time
+from indicators import compute_rsi, compute_macd
+
 
 class StockDataLoader:
     def __init__(self, ticker: str, start: str = "2022-01-01",
@@ -53,36 +55,15 @@ class StockDataLoader:
 
         raise ValueError(f"❌ Nie udało się pobrać danych dla {self.ticker} po {max_retries} próbach.")
 
-    @staticmethod
-    def compute_rsi(series, period=14):
-        delta = series.diff(1)
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-        avg_gain = gain.rolling(window=period).mean()
-        avg_loss = loss.rolling(window=period).mean()
-        rs = avg_gain / avg_loss
-        rsi = 100 - (100 / (1 + rs))
-        return rsi
-
-    @staticmethod
-    def compute_macd(series, short=12, long=26, signal=9):
-        short_ema = series.ewm(span=short, adjust=False).mean()
-        long_ema = series.ewm(span=long, adjust=False).mean()
-        macd = short_ema - long_ema
-        signal_line = macd.ewm(span=signal, adjust=False).mean()
-        hist = macd - signal_line
-        return macd, signal_line, hist
-
     def add_indicators_in_memory(self):
         """Dodaje RSI i MACD w pamięci, bez zmiany CSV"""
         if self.data is None or self.data.empty:
             raise ValueError("❌ Brak danych. Najpierw pobierz dane metodą download_data().")
 
         df = self.data.copy()
-        df["RSI"] = self.compute_rsi(df["Close"])
-        df["MACD"], df["MACD_signal"], df["MACD_hist"] = self.compute_macd(df["Close"])
-        df.dropna(inplace=True)  # tylko w pamięci
-
+        df["RSI"] = compute_rsi(df["Close"])
+        df["MACD"], df["MACD_signal"], df["MACD_hist"] = compute_macd(df["Close"])
+        df.dropna(inplace=True)
         return df
 
 
