@@ -7,7 +7,7 @@ from plot_utils import plot_candlestick_forecast
 ticker = input("Podaj ticker spółki (np. TSLA, AAPL): ").strip().upper()
 features = ["Open", "High", "Low", "Close", "Volume"]
 target_features = ["Open", "High", "Low", "Close", "Volume"]
-seq_length = 600 # z ilu dni model bierze dane
+seq_length = 200 # z ilu dni model bierze dane
 hidden_size = 64 #  ilosc neuronow w warstwie ukrytej
 num_layers = 3 # ilosc warstw ukrytych
 dropout = 0.2 # procent odrzuconych neuronow
