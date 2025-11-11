@@ -7,11 +7,11 @@ from plot_utils import plot_candlestick_forecast
 ticker = input("Podaj ticker spółki (np. TSLA, AAPL): ").strip().upper()
 features = ["Open", "High", "Low", "Close", "Volume"]
 target_features = ["Open", "High", "Low", "Close", "Volume"]
-seq_length = 200 # z ilu dni model bierze dane
-hidden_size = 64 #  ilosc neuronow w warstwie ukrytej
+seq_length = 120 # z ilu dni model bierze dane
+hidden_size = 128 #  ilosc neuronow w warstwie ukrytej
 num_layers = 3 # ilosc warstw ukrytych
-dropout = 0.2 # procent odrzuconych neuronow
-epochs = 15 # ilosc iteracji
+dropout = 0.25 # procent odrzuconych neuronow
+epochs = 50 # ilosc iteracji
 batch_size = 32 # ilość danych w pojedynczej iteracji
 last_days = 100 # ilosc dni przedstawionych na wykresie wstecz
 n_steps = 5 #ilosc dni do przewidzenia
