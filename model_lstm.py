@@ -5,22 +5,16 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import numpy as np
 
 class LSTMModel(nn.Module):
-    def __init__(self, input_size, output_size, hidden_size=32, num_layers=2, dropout=0.3):
+    def __init__(self, input_size, output_size, hidden_size=128, num_layers=3, dropout=0.25):
         super(LSTMModel, self).__init__()
-        self.lstm = nn.LSTM(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            batch_first=True,
-            dropout=dropout
-        )
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers,
+                            batch_first=True, dropout=dropout)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
         out, _ = self.lstm(x)
         out = out[:, -1, :]
-        out = self.fc(out)
-        return out
+        return self.fc(out)
 
 class LSTMTrainer:
     def __init__(self, model, lr=0.001, device=None):
@@ -29,18 +23,17 @@ class LSTMTrainer:
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
-    def train(self, X_train, y_train, epochs=15, batch_size=32):
+    def train(self, X_train, y_train, epochs=50, batch_size=32):
         X_train = torch.tensor(X_train, dtype=torch.float32).to(self.device)
         y_train = torch.tensor(y_train, dtype=torch.float32).to(self.device)
-        dataset = torch.utils.data.TensorDataset(X_train, y_train)
-        loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(X_train, y_train),
+                                             batch_size=batch_size, shuffle=True)
         self.model.train()
         for epoch in range(epochs):
             epoch_loss = 0
             for X_batch, y_batch in loader:
                 self.optimizer.zero_grad()
-                outputs = self.model(X_batch)
-                loss = self.criterion(outputs, y_batch)
+                loss = self.criterion(self.model(X_batch), y_batch)
                 loss.backward()
                 self.optimizer.step()
                 epoch_loss += loss.item()
@@ -57,8 +50,5 @@ class LSTMTrainer:
         mae = mean_absolute_error(y_true, preds)
         rmse = np.sqrt(mean_squared_error(y_true, preds))
         r2 = r2_score(y_true, preds)
-        print("\n✅ Wyniki regresji:")
-        print(f"📉 MAE: {mae:.6f}")
-        print(f"📊 RMSE: {rmse:.6f}")
-        print(f"📈 R²: {r2:.4f}")
+        print(f"\nMAE: {mae:.6f}, RMSE: {rmse:.6f}, R2: {r2:.4f}")
         return mae, rmse, r2

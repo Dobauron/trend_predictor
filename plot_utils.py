@@ -6,52 +6,70 @@ from datetime import timedelta
 from matplotlib import dates as mdates
 from matplotlib.patches import Rectangle
 
-def plot_candlestick_forecast(data, preprocessor, model, X_test, features,
-                               last_days=100, n_steps=5, device='cpu', ticker='TICKER'):
-    """
-    data        : DataFrame z pełnymi danymi historycznymi
-    preprocessor: obiekt DataPreprocessor
-    model       : wytrenowany model LSTM
-    X_test      : dane testowe (sekwencje)
-    features    : lista cech ['Open','High','Low','Close','Volume']
-    last_days   : ile ostatnich dni historycznych pokazać
-    n_steps     : ile dni prognozować do przodu
-    """
-    model.eval()
-    with torch.no_grad():
-        X_test_tensor = torch.tensor(X_test, dtype=torch.float32).to(device)
-        preds_scaled = model(X_test_tensor).detach().cpu().numpy()
+class CandlestickPlotter:
+    def __init__(self, data: pd.DataFrame, features: list, preprocessor=None, model=None, X_test=None, device='cpu'):
+        """
+        data: pełny DataFrame z historycznymi danymi
+        features: lista wszystkich cech ['Open','High','Low','Close','Volume',...]
+        preprocessor: DataPreprocessor (potrzebny do odskalowania predykcji)
+        model: wytrenowany model LSTM
+        X_test: dane testowe (sekwencje)
+        device: 'cpu' lub 'cuda'
+        """
+        self.data = data
+        self.features = features
+        self.preprocessor = preprocessor
+        self.model = model
+        self.X_test = X_test
+        self.device = device
+        self.forecast_df = None
+        self.preds_close = None
 
-    # Odskalowanie predykcji historycznych (tylko Close do wykresu)
-    preds_close = preprocessor.target_scaler.inverse_transform(preds_scaled)[:, features.index("Close")]
+    def prepare_forecast_data(self, n_steps=5):
+        """Generuje prognozy multi-step i odskalowuje każdą cechę indywidualnie."""
+        if self.model is None or self.X_test is None or self.preprocessor is None:
+            raise ValueError("Model, X_test i preprocessor muszą być ustawione")
 
-    # Multi-step multi-feature forecast
-    multi_preds = []
-    last_seq = X_test[-1]
-    current_seq = torch.tensor(last_seq, dtype=torch.float32).unsqueeze(0).to(device)
+        self.model.eval()
+        with torch.no_grad():
+            X_test_tensor = torch.tensor(self.X_test, dtype=torch.float32).to(self.device)
+            preds_scaled = self.model(X_test_tensor).detach().cpu().numpy()
 
-    for step in range(n_steps):
-        pred = model(current_seq).detach().cpu().numpy().flatten()  # shape (5,)
-        multi_preds.append(pred)
+        # Odskalowanie historycznych predykcji Close
+        self.preds_close = self.preprocessor.inverse_transform(
+            "Close", preds_scaled[:, self.features.index("Close")]
+        )
 
-        # sliding window - aktualizacja sekwencji
-        new_step = current_seq[:, 1:, :].clone()
-        next_features = torch.tensor(pred, dtype=torch.float32).unsqueeze(0).to(device)  # shape (1,5)
-        current_seq = torch.cat((new_step, next_features.unsqueeze(1)), dim=1)
+        # Multi-step forecast
+        multi_preds = []
+        last_seq = self.X_test[-1]
+        current_seq = torch.tensor(last_seq, dtype=torch.float32).unsqueeze(0).to(self.device)
 
-    multi_preds = np.array(multi_preds)
-    multi_preds_true = preprocessor.target_scaler.inverse_transform(multi_preds)
+        for step in range(n_steps):
+            pred = self.model(current_seq).detach().cpu().numpy().flatten()
+            multi_preds.append(pred)
+            new_step = current_seq[:, 1:, :].clone()
+            next_features = torch.tensor(pred, dtype=torch.float32).unsqueeze(0).to(self.device)
+            current_seq = torch.cat((new_step, next_features.unsqueeze(1)), dim=1)
 
-    # Daty
-    dates_hist = data.index[-last_days:]
-    last_date = dates_hist[-1]
-    dates_forecast = [last_date + timedelta(days=i + 1) for i in range(n_steps)]
+        multi_preds = np.array(multi_preds)
 
-    # Wykres świec
-    fig, ax = plt.subplots(figsize=(14, 6))
+        # Odskalowanie indywidualne
+        multi_preds_true = np.zeros_like(multi_preds)
+        print(self.features)
+        for i, feat in enumerate(self.features):
+            multi_preds_true[:, i] = self.preprocessor.inverse_transform(
+                feature_name=feat,
+                scaled_values=multi_preds[:, i]
+            )
 
-    # Funkcja pomocnicza do rysowania świec
-    def plot_candles(ax, o, h, l, c, dates, width=0.6):
+        dates_forecast = [self.data.index[-1] + timedelta(days=i + 1) for i in range(n_steps)]
+        self.forecast_df = pd.DataFrame(multi_preds_true, columns=self.features, index=dates_forecast)
+        return self.forecast_df, self.preds_close
+
+    @staticmethod
+    def _plot_candles(ax, o, h, l, c, dates, width=0.6):
+        """Pomocnicza metoda do rysowania świec."""
         for i in range(len(dates)):
             color = 'green' if c[i] >= o[i] else 'red'
             ax.plot([dates[i], dates[i]], [l[i], h[i]], color='black')
@@ -59,47 +77,51 @@ def plot_candlestick_forecast(data, preprocessor, model, X_test, features,
                              width, abs(c[i]-o[i]), color=color)
             ax.add_patch(rect)
 
-    # Historyczne świeczki
-    plot_candles(ax,
-                 data['Open'].iloc[-last_days:].values,
-                 data['High'].iloc[-last_days:].values,
-                 data['Low'].iloc[-last_days:].values,
-                 data['Close'].iloc[-last_days:].values,
-                 dates_hist)
+    def plot_forecast(self, last_days=100, ticker='TICKER'):
+        """Rysuje wykres świec historycznych i prognoz LSTM."""
+        if self.forecast_df is None or self.preds_close is None:
+            raise ValueError("Najpierw wywołaj prepare_forecast_data()")
 
-    # Prognoza historyczna LSTM (tylko Close jako linia)
-    ax.plot(dates_hist[-len(preds_close):], preds_close[-len(dates_hist):], linestyle='--', color='blue',
-            label='Predykcja LSTM (historyczne Close)')
+        dates_hist = self.data.index[-last_days:]
+        fig, ax = plt.subplots(figsize=(14, 6))
 
-    # Prognoza świecowa n dni do przodu
-    plot_candles(ax,
-                 multi_preds_true[:, features.index("Open")],
-                 multi_preds_true[:, features.index("High")],
-                 multi_preds_true[:, features.index("Low")],
-                 multi_preds_true[:, features.index("Close")],
-                 dates_forecast)
+        # Historyczne świeczki
+        self._plot_candles(ax,
+                           self.data['Open'].iloc[-last_days:].values,
+                           self.data['High'].iloc[-last_days:].values,
+                           self.data['Low'].iloc[-last_days:].values,
+                           self.data['Close'].iloc[-last_days:].values,
+                           dates_hist)
 
-    ax.set_title(f"📈 Prognoza LSTM dla {ticker}")
-    ax.set_xlabel("Data")
-    ax.set_ylabel("Cena [USD]")
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-    plt.xticks(rotation=45)
-    ax.legend()
-    ax.grid(True)
+        # Linia historycznej predykcji Close
+        ax.plot(dates_hist[-len(self.preds_close):], self.preds_close[-len(dates_hist):],
+                linestyle='--', color='blue', label='Predykcja LSTM (historyczne Close)')
 
-    # Tabela z prognozami
-    forecast_df = pd.DataFrame(multi_preds_true, columns=features, index=dates_forecast)
-    table = plt.table(cellText=np.round(forecast_df.values, 2),
-                      rowLabels=forecast_df.index.strftime('%Y-%m-%d'),
-                      colLabels=forecast_df.columns,
-                      cellLoc='center',
-                      rowLoc='center',
-                      loc='bottom',
-                      bbox=[0, -0.35, 1, 0.3])
-    table.auto_set_font_size(False)
-    table.set_fontsize(10)
+        # Prognoza świecowa
+        self._plot_candles(ax,
+                           self.forecast_df['Open'].values,
+                           self.forecast_df['High'].values,
+                           self.forecast_df['Low'].values,
+                           self.forecast_df['Close'].values,
+                           self.forecast_df.index)
 
-    plt.subplots_adjust(left=0.05, bottom=0.35)
-    plt.show()
+        ax.set_title(f"📈 Prognoza LSTM dla {ticker}")
+        ax.set_xlabel("Data")
+        ax.set_ylabel("Cena [USD]")
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        plt.xticks(rotation=45)
+        ax.legend()
+        ax.grid(True)
 
-    return forecast_df
+        # Tabela prognoz
+        table = plt.table(cellText=np.round(self.forecast_df.values, 2),
+                          rowLabels=self.forecast_df.index.strftime('%Y-%m-%d'),
+                          colLabels=self.forecast_df.columns,
+                          cellLoc='center',
+                          rowLoc='center',
+                          loc='bottom',
+                          bbox=[0, -0.35, 1, 0.3])
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+        plt.subplots_adjust(left=0.05, bottom=0.35)
+        plt.show()
